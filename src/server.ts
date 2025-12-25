@@ -3,6 +3,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import { config } from './config/env.js'
+import { connectDatabase } from './config/database.js'
 import { apiLimiter, rpcLimiter, authLimiter  } from './middleware/rateLimiter.js'
 import { sanitizeRequestBody, sanitizeQueryParams } from './middleware/sanitization.js'
 import { ensureCsrfToken } from './middleware/csrf.js'
@@ -24,6 +25,7 @@ import rpcRoutes from './routes/rpc.js'
  * ✅ Optional whitelist enforcement
  * ✅ Helmet security headers
  * ✅ CORS configuration
+ * ✅ MongoDB database connection
  */
 
 const app = express()
@@ -127,18 +129,28 @@ app.use(errorHandler)
 // Only start Express server if not in Vercel serverless environment
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   const PORT = config.server.port || 3000
-  app.listen(PORT, () => {
-    console.log(`
+  
+  // Connect to database first, then start server
+  connectDatabase()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`
 ╔════════════════════════════════════════════╗
 ║   🚀 Exhibition Backend Started           ║
 ╠════════════════════════════════════════════╣
 ║   Port: ${PORT.toString().padEnd(35)}║
 ║   Mode: ${config.server.nodeEnv.padEnd(35)}║
 ║   CORS: ${config.cors.origin.padEnd(35)}║
+║   Database: ${config.database.dbName.padEnd(30)}║
 ║   Whitelist: ${(config.auth.walletWhitelist.length > 0 ? `${config.auth.walletWhitelist.length} wallets` : 'Disabled').padEnd(29)}║
 ╚════════════════════════════════════════════╝
-  `)
-})
+    `)
+      })
+    })
+    .catch((error) => {
+      console.error('❌ Failed to start server:', error)
+      process.exit(1)
+    })
 }
 
 export default app

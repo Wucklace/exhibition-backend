@@ -3,6 +3,7 @@ import { authenticateJWT } from '../middleware/auth.js'
 import { verifyCsrfToken } from '../middleware/csrf.js'
 import { walletLimiter } from '../middleware/rateLimiter.js'
 import { validateUrl, sanitizeInput, sanitizeNumeric } from '../utils/sanitize.js'
+import { ProjectMetadataModel } from '../models/ProjectMetadata.js'
 import type { ProjectCreateRequest } from '../types/index.js'
 
 const router = Router()
@@ -142,5 +143,121 @@ router.get('/:id', async (req, res) => {
     })
   }
 })
+
+// =============================================
+// METADATA ENDPOINTS (NEW)
+// =============================================
+
+/**
+ * GET /api/projects/:id/metadata
+ * Get project metadata (public)
+ */
+router.get('/:id/metadata', async (req, res) => {
+  try {
+    const projectId = sanitizeInput(req.params.id)
+    
+    const metadata = await ProjectMetadataModel.getByProjectId(projectId)
+    
+    if (!metadata) {
+      res.status(404).json({
+        success: false,
+        message: 'Metadata not found'
+      })
+      return
+    }
+    
+    res.json({
+      success: true,
+      data: metadata
+    })
+  } catch (error) {
+    console.error('Error fetching metadata:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch metadata'
+    })
+  }
+})
+
+/**
+ * POST /api/projects/:id/metadata
+ * Create/update project metadata (protected - project owner only)
+ */
+router.post(
+  '/:id/metadata',
+  authenticateJWT,
+  verifyCsrfToken,
+  async (req, res) => {
+    try {
+      const projectId = sanitizeInput(req.params.id)
+      const { twitter, website, overview, ownerAddress } = req.body
+      const walletAddress = req.user?.address
+      
+      if (!walletAddress) {
+        res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        })
+        return
+      }
+      
+      // Verify the authenticated wallet matches the project owner
+      if (walletAddress.toLowerCase() !== ownerAddress?.toLowerCase()) {
+        res.status(403).json({
+          success: false,
+          message: 'Only project owner can update metadata'
+        })
+        return
+      }
+      
+      // Validate URLs if provided
+      if (twitter) {
+        const validTwitter = validateUrl(twitter)
+        if (!validTwitter) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid Twitter URL'
+          })
+          return
+        }
+      }
+      
+      if (website) {
+        const validWebsite = validateUrl(website)
+        if (!validWebsite) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid website URL'
+          })
+          return
+        }
+      }
+      
+      // Sanitize overview text
+      const sanitizedOverview = overview ? sanitizeInput(overview) : undefined
+      
+      const metadata = await ProjectMetadataModel.upsert(
+        projectId,
+        walletAddress,
+        {
+          twitter: twitter || undefined,
+          website: website || undefined,
+          overview: sanitizedOverview
+        }
+      )
+      
+      res.json({
+        success: true,
+        data: metadata
+      })
+    } catch (error) {
+      console.error('Error saving metadata:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Failed to save metadata'
+      })
+    }
+  }
+)
 
 export default router

@@ -24,6 +24,9 @@ const envSchema = z.object({
   RPC_URL: z.string().url().optional(),
   HELMET_ENABLED: z.coerce.boolean().default(true),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  // MongoDB configuration (NEW)
+  MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
+  DB_NAME: z.string().default('exhibition_db'),
 })
 
 let env: z.infer<typeof envSchema>
@@ -54,7 +57,6 @@ export const config = Object.freeze({
   },
   jwt: {
     secret: env.JWT_SECRET,
-    // Safe: expiresIn is a validated string (e.g. '24h') — no need for StringValue
     expiresIn: env.JWT_EXPIRES_IN as StringValue,
   },
   auth: {
@@ -78,6 +80,11 @@ export const config = Object.freeze({
   logging: {
     level: env.LOG_LEVEL,
   },
+  // Database configuration (NEW)
+  database: {
+    mongoUri: env.MONGODB_URI,
+    dbName: env.DB_NAME,
+  },
 } as const)
 
 // Validate secrets
@@ -91,11 +98,18 @@ if (config.csrf.secret.includes('change-this')) {
   if (config.server.isProduction) process.exit(1)
 }
 
+// Validate MongoDB URI (NEW)
+if (!config.database.mongoUri || config.database.mongoUri.includes('change-this')) {
+  console.error('❌ MONGODB_URI is missing or placeholder!')
+  if (config.server.isProduction) process.exit(1)
+}
+
 if (!config.server.isProduction) {
   console.log('✅ Environment validation passed')
   console.log(`   Mode: ${config.server.nodeEnv}`)
   console.log(`   Port: ${config.server.port}`)
   console.log(`   Frontend: ${config.cors.origin}`)
+  console.log(`   Database: ${config.database.dbName}`)
   console.log(
     `   Whitelist: ${
       config.auth.walletWhitelist.length > 0

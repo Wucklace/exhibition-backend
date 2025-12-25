@@ -1,4 +1,5 @@
 import app from './server.js'
+import { connectDatabase } from './config/database.js'
 
 /**
  * Vercel Serverless Function Entry Point
@@ -9,7 +10,13 @@ import app from './server.js'
  * - Lambda function invocation
  * - Response handling
  * 
- * No need for app.listen() - Vercel manages the server lifecycle.
- */
+ * Database connection is established before handling requests.
+*/
+
+// Initialize database connection
+connectDatabase().catch((error) => {
+  console.error('Failed to connect to database:', error)
+  // Don't exit in serverless - let Vercel handle retries
+})
 
 export default app
