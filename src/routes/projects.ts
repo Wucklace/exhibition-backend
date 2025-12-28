@@ -268,7 +268,7 @@ router.post(
   '/:id/metadata',
   authenticateJWT,
   verifyCsrfToken,
-  metadataLimiter,
+  //metadataLimiter,
   async (req, res) => {
     try {
       // Guard against excessively long IDs
