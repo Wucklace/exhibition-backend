@@ -22,9 +22,10 @@ const envSchema = z.object({
   CSRF_SECRET: z.string().min(32, 'CSRF_SECRET must be at least 32 characters'),
   CHAIN_ID: z.string().optional(),
   RPC_URL: z.string().url().optional(),
+  CONTRACT_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'CONTRACT_ADDRESS must be a valid Ethereum address').optional(), // ADD THIS
   HELMET_ENABLED: z.coerce.boolean().default(true),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
-  // MongoDB configuration (NEW)
+  // MongoDB configuration
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
   DB_NAME: z.string().default('exhibition_db'),
 })
@@ -73,6 +74,7 @@ export const config = Object.freeze({
   chain: {
     chainId: env.CHAIN_ID ?? null,
     rpcUrl: env.RPC_URL ?? null,
+    contractAddress: env.CONTRACT_ADDRESS ?? null, // ADD THIS
   },
   security: {
     helmetEnabled: env.HELMET_ENABLED,
@@ -80,7 +82,6 @@ export const config = Object.freeze({
   logging: {
     level: env.LOG_LEVEL,
   },
-  // Database configuration (NEW)
   database: {
     mongoUri: env.MONGODB_URI,
     dbName: env.DB_NAME,
@@ -98,9 +99,19 @@ if (config.csrf.secret.includes('change-this')) {
   if (config.server.isProduction) process.exit(1)
 }
 
-// Validate MongoDB URI (NEW)
+// Validate MongoDB URI
 if (!config.database.mongoUri || config.database.mongoUri.includes('change-this')) {
   console.error('❌ MONGODB_URI is missing or placeholder!')
+  if (config.server.isProduction) process.exit(1)
+}
+
+// Validate blockchain configuration (NEW)
+if (config.chain.rpcUrl && !config.chain.contractAddress) {
+  console.warn('⚠️  RPC_URL is set but CONTRACT_ADDRESS is missing')
+}
+
+if (config.chain.contractAddress && !config.chain.rpcUrl) {
+  console.error('❌ CONTRACT_ADDRESS is set but RPC_URL is missing!')
   if (config.server.isProduction) process.exit(1)
 }
 
@@ -110,6 +121,9 @@ if (!config.server.isProduction) {
   console.log(`   Port: ${config.server.port}`)
   console.log(`   Frontend: ${config.cors.origin}`)
   console.log(`   Database: ${config.database.dbName}`)
+  console.log(`   Chain ID: ${config.chain.chainId || 'NOT SET'}`)
+  console.log(`   RPC URL: ${config.chain.rpcUrl ? 'SET' : 'NOT SET'}`)
+  console.log(`   Contract: ${config.chain.contractAddress || 'NOT SET'}`)
   console.log(
     `   Whitelist: ${
       config.auth.walletWhitelist.length > 0
