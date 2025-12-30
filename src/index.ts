@@ -1,3 +1,4 @@
+// src/index.ts
 import app from './server.js'
 import { connectDatabase } from './config/database.js'
 
