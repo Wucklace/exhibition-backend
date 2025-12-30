@@ -115,7 +115,12 @@ app.get('/health', (_req, res) => {
 // =============================================
 app.use('/api/auth', authLimiter, authRoutes)
 app.use('/api/projects', apiLimiter, projectRoutes)
-app.use('/api/rpc', rpcLimiter, rpcRoutes)
+
+// Only mount RPC in local development
+if (config.server.isDevelopment) {
+  console.log('⚠️ Mounting local RPC proxy at /api/rpc')
+  app.use('/api/rpc', rpcRoutes, rpcLimiter)
+}
 
 // =============================================
 // 9. ERROR HANDLING
