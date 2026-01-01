@@ -1,3 +1,4 @@
+// src/middleware/csrf.ts
 import type { Request, Response, NextFunction } from 'express'
 import crypto from 'crypto'
 import { config } from '../config/env.js'
@@ -29,6 +30,8 @@ function generateCsrfToken(): string {
 /**
  * Set CSRF token in cookie
  * Call this on auth routes to issue new tokens
+ * 
+ * FIXED: Now supports cross-subdomain access (app.exhibitiondefi.xyz ↔ api.exhibitiondefi.xyz)
  */
 export function setCsrfToken(_req: Request, res: Response): string {
   const token = generateCsrfToken()
@@ -36,7 +39,8 @@ export function setCsrfToken(_req: Request, res: Response): string {
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false, // MUST be false so JS can read it
     secure: config.server.isProduction, // HTTPS only in production
-    sameSite: 'strict',
+    sameSite: config.server.isProduction ? 'none' : 'strict', // 'none' required for cross-subdomain
+    domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined, // Share across subdomains
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
   })
   

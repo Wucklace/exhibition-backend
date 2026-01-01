@@ -1,3 +1,4 @@
+// src/routes/auth.ts
 import { Router } from 'express'
 import { verifyWalletSignature, getExpectedMessage } from '../services/walletVerifier.js'
 import { generateToken } from '../services/jwtService.js'
@@ -11,6 +12,8 @@ const router = Router()
 /**
  * POST /api/auth/verify
  * Verify wallet signature and issue JWT token
+ * 
+ * FIXED: Auth cookie now supports cross-subdomain access
  */
 router.post('/verify', authLimiter, async (req, res) => {
   try {
@@ -41,15 +44,16 @@ router.post('/verify', authLimiter, async (req, res) => {
     // Generate JWT token
     const token = generateToken(address)
     
-    // Set httpOnly cookie with JWT
+    // Set httpOnly cookie with JWT (FIXED for cross-subdomain)
     res.cookie('auth_token', token, {
       httpOnly: true, // Prevents JavaScript access (XSS protection)
       secure: config.server.isProduction, // HTTPS only in production
-      sameSite: 'strict', // CSRF protection
+      sameSite: config.server.isProduction ? 'none' : 'strict', // 'none' required for cross-subdomain
+      domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined, // Share across subdomains
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     })
     
-    // Set CSRF token
+    // Set CSRF token (also fixed for cross-subdomain in csrf.ts)
     const csrfToken = setCsrfToken(req, res)
     
     res.json({
@@ -75,9 +79,19 @@ router.post('/verify', authLimiter, async (req, res) => {
  * POST /api/auth/logout
  * Clear auth cookies
  */
-router.post('/logout', (_s, res) => {
-  res.clearCookie('auth_token')
-  res.clearCookie('csrf_token')
+router.post('/logout', (_req, res) => {
+  // Clear cookies with same domain settings
+  res.clearCookie('auth_token', {
+    domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined,
+    secure: config.server.isProduction,
+    sameSite: config.server.isProduction ? 'none' : 'strict',
+  })
+  
+  res.clearCookie('csrf_token', {
+    domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined,
+    secure: config.server.isProduction,
+    sameSite: config.server.isProduction ? 'none' : 'strict',
+  })
   
   res.json({
     success: true,
