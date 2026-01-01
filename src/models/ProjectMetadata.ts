@@ -19,7 +19,7 @@ export class ProjectMetadataModel {
    * Get metadata for a project
    */
   static async getByProjectId(projectId: string): Promise<ProjectMetadata | null> {
-    const db = await getDatabase()
+    const db = getDatabase()
     const collection = db.collection<ProjectMetadata>(COLLECTION_NAME)
     
     const metadata = await collection.findOne({ projectId })
@@ -38,7 +38,7 @@ export class ProjectMetadataModel {
       overview?: string
     }
   ): Promise<ProjectMetadata> {
-    const db = await getDatabase()
+    const db = getDatabase()
     const collection = db.collection<ProjectMetadata>(COLLECTION_NAME)
     
     const now = Date.now()
@@ -68,7 +68,7 @@ export class ProjectMetadataModel {
    * Delete metadata for a project
    */
   static async delete(projectId: string): Promise<boolean> {
-    const db = await getDatabase()
+    const db = getDatabase()
     const collection = db.collection<ProjectMetadata>(COLLECTION_NAME)
     
     const result = await collection.deleteOne({ projectId })

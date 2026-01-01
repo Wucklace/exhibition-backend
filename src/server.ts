@@ -115,7 +115,7 @@ app.get('/health', (_req, res) => {
 // =============================================
 app.use('/api/auth', authLimiter, authRoutes)
 app.use('/api/projects', apiLimiter, projectRoutes)
-app.use('/api/rpc', rpcRoutes, rpcLimiter)
+app.use('/api/rpc', rpcLimiter, rpcRoutes)
 
 // =============================================
 // 9. ERROR HANDLING
