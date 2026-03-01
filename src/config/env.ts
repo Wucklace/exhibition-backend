@@ -50,6 +50,7 @@ export const config = Object.freeze({
     nodeEnv: env.NODE_ENV,
     isDevelopment: env.NODE_ENV === 'development',
     isProduction: env.NODE_ENV === 'production',
+    isCustomDomain: env.FRONTEND_URL.includes('exhibitiondefi.xyz'), // NEW
   },
   cors: {
     origin: env.FRONTEND_URL,

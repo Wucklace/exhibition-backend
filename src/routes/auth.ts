@@ -10,16 +10,42 @@ import type { VerifyWalletRequest } from '../types/index.js'
 const router = Router()
 
 /**
+ * Cookie options based on environment
+ * - Production (custom domain): cross-subdomain via .exhibitiondefi.xyz
+ * - Production (Vercel preview): cross-origin, no domain lock
+ * - Development (localhost): strict, no secure
+ */
+const getCookieOptions = () => {
+  if (!config.server.isProduction) {
+    return {
+      secure: false,
+      sameSite: 'strict' as const,
+      domain: undefined,
+    }
+  }
+  if (config.server.isCustomDomain) {
+    return {
+      secure: true,
+      sameSite: 'none' as const,
+      domain: '.exhibitiondefi.xyz',
+    }
+  }
+  // Vercel preview URLs
+  return {
+    secure: true,
+    sameSite: 'none' as const,
+    domain: undefined,
+  }
+}
+
+/**
  * POST /api/auth/verify
  * Verify wallet signature and issue JWT token
- * 
- * FIXED: Auth cookie now supports cross-subdomain access
  */
 router.post('/verify', authLimiter, async (req, res) => {
   try {
     const { address, signature, message } = req.body as VerifyWalletRequest
-    
-    // Validate inputs
+
     if (!address || !signature || !message) {
       res.status(400).json({
         success: false,
@@ -28,10 +54,9 @@ router.post('/verify', authLimiter, async (req, res) => {
       })
       return
     }
-    
-    // Verify signature
+
     const verification = await verifyWalletSignature(address, signature, message)
-    
+
     if (!verification.isValid) {
       res.status(401).json({
         success: false,
@@ -40,31 +65,27 @@ router.post('/verify', authLimiter, async (req, res) => {
       })
       return
     }
-    
-    // Generate JWT token
+
     const token = generateToken(address)
-    
-    // Set httpOnly cookie with JWT (FIXED for cross-subdomain)
+    const cookieOptions = getCookieOptions()
+
     res.cookie('auth_token', token, {
-      httpOnly: true, // Prevents JavaScript access (XSS protection)
-      secure: config.server.isProduction, // HTTPS only in production
-      sameSite: config.server.isProduction ? 'none' : 'strict', // 'none' required for cross-subdomain
-      domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined, // Share across subdomains
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      ...cookieOptions,
     })
-    
-    // Set CSRF token (also fixed for cross-subdomain in csrf.ts)
+
     const csrfToken = setCsrfToken(req, res)
-    
+
     res.json({
       success: true,
       message: 'Authentication successful',
       data: {
         address: verification.recoveredAddress,
-        csrfToken, // Send CSRF token in response for initial setup
+        csrfToken,
       }
     })
-    
+
   } catch (error) {
     console.error('Auth verify error:', error)
     res.status(500).json({
@@ -80,19 +101,11 @@ router.post('/verify', authLimiter, async (req, res) => {
  * Clear auth cookies
  */
 router.post('/logout', (_req, res) => {
-  // Clear cookies with same domain settings
-  res.clearCookie('auth_token', {
-    domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined,
-    secure: config.server.isProduction,
-    sameSite: config.server.isProduction ? 'none' : 'strict',
-  })
-  
-  res.clearCookie('csrf_token', {
-    domain: config.server.isProduction ? '.exhibitiondefi.xyz' : undefined,
-    secure: config.server.isProduction,
-    sameSite: config.server.isProduction ? 'none' : 'strict',
-  })
-  
+  const cookieOptions = getCookieOptions()
+
+  res.clearCookie('auth_token', cookieOptions)
+  res.clearCookie('csrf_token', cookieOptions)
+
   res.json({
     success: true,
     message: 'Logged out successfully'
@@ -105,7 +118,7 @@ router.post('/logout', (_req, res) => {
  */
 router.get('/me', async (req, res) => {
   const token = req.cookies?.auth_token
-  
+
   if (!token) {
     res.status(401).json({
       success: false,
@@ -113,10 +126,10 @@ router.get('/me', async (req, res) => {
     })
     return
   }
-  
+
   const { verifyToken } = await import('../services/jwtService.js')
   const decoded = verifyToken(token)
-  
+
   if (!decoded) {
     res.status(401).json({
       success: false,
@@ -124,7 +137,7 @@ router.get('/me', async (req, res) => {
     })
     return
   }
-  
+
   res.json({
     success: true,
     data: {
